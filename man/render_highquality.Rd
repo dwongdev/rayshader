@@ -10,6 +10,10 @@ render_highquality(
   sample_method = "sobol_blue",
   min_variance = 1e-07,
   light = TRUE,
+  lat = NA,
+  long = NA,
+  datetime = NA,
+  sky_args = list(),
   lightdirection = 315,
   lightaltitude = 45,
   lightsize = NULL,
@@ -51,7 +55,7 @@ render_highquality(
   clear = FALSE,
   return_scene = FALSE,
   print_scene_info = FALSE,
-  clamp_value = 10,
+  clamp_value = NA,
   calculate_consistent_normals = FALSE,
   load_normals = TRUE,
   point_material = rayrender::diffuse,
@@ -59,6 +63,7 @@ render_highquality(
   path_material = rayrender::diffuse,
   path_material_args = list(),
   animation_camera_coords = NULL,
+  plot = is.na(filename),
   ...
 )
 }
@@ -78,6 +83,19 @@ Smaller numbers give higher quality images, at the expense of longer rendering t
 If this is set to zero, the adaptive sampler will be turned off and the renderer will use the maximum number of samples everywhere.}
 
 \item{light}{Default \code{TRUE}. Whether there should be a light in the scene. If not, the scene will be lit with a bluish sky.}
+
+\item{lat}{Default \code{NA}. Latitude (degrees) for automatic sky generation.
+When \code{lat}, \code{long}, \code{datetime}, or \code{sky_args} are supplied, \code{render_highquality()} uses
+\code{skymodelr::generate_sky_latlong()} to create an EXR environment map, disables the default light,
+and sets \code{environment_light} for the render.}
+
+\item{long}{Default \code{NA}. Longitude (degrees; west < 0) for automatic sky generation.}
+
+\item{datetime}{Default \code{NA}. POSIXct or character date-time used to position the sun.}
+
+\item{sky_args}{Default empty \code{list()}. Additional arguments passed to
+\code{skymodelr::generate_sky_latlong()} (except \code{filename}, which is managed internally).
+The EXR is cached in \code{tempdir()} using a filename derived from these inputs.}
 
 \item{lightdirection}{Default \code{315}. Position of the light angle around the scene.
 If this is a vector longer than one, multiple lights will be generated (using values from
@@ -178,7 +196,8 @@ and \code{camera_lookat} vectors.}
 
 \item{print_scene_info}{Default \code{FALSE}. If \code{TRUE}, it will print the position and lookat point of the camera.}
 
-\item{clamp_value}{Default \code{10}. See documentation for \code{rayrender::render_scene()}.}
+\item{clamp_value}{Default \code{NA}. If \code{NA}, uses \code{100} when the OIDN denoiser is unavailable
+and \code{10000} when it is available (via \code{rayrender::has_denoiser()}).}
 
 \item{calculate_consistent_normals}{Default \code{FALSE}. Whether to calculate consistent vertex normals to prevent energy
 loss at edges.}
@@ -201,6 +220,8 @@ can be specified here.}
 
 \item{animation_camera_coords}{Default \code{NULL}. Expects camera animation output from either \code{\link[=convert_path_to_animation_coords]{convert_path_to_animation_coords()}}
 or \code{rayrender::generate_camera_motion()} functions.}
+
+\item{plot}{Default \code{is.na(filename)}. Whether to plot the scene, or just return the RGBA array.}
 
 \item{...}{Additional parameters to pass to \code{rayrender::render_scene}()}
 }
@@ -281,5 +302,54 @@ render_highquality(lightdirection = c(240), lightaltitude=30, lightcolor=c("#555
                   scene_elements = rayrender::sphere(z=0,y=15, x=-18, radius=5,
                                    material=rayrender::light(color="red",intensity=10)),
                   min_variance = 0, samples = 16)
+}
+# Render the shadow of the Washington Monument with a realistic sky at that datetime
+run_examples = length(find.package("sf", quiet = TRUE)) &&
+              length(find.package("elevatr", quiet = TRUE)) &&
+              length(find.package("raster", quiet = TRUE)) &&
+              run_documentation()
+if(run_examples) {
+library(sf)
+#Set location of washington monument
+washington_monument_location =  st_point(c(-77.035249, 38.889462))
+wm_point = washington_monument_location |>
+ st_point() |>
+ st_sfc(crs = 4326) |>
+ st_transform(st_crs(washington_monument_multipolygonz))
+
+elevation_data = elevatr::get_elev_raster(locations = wm_point, z = 14)
+
+scene_bbox = st_bbox(st_buffer(wm_point,300))
+cropped_data = raster::crop(elevation_data, scene_bbox)
+
+#Use rayshader to convert that raster data to a matrix
+dc_elevation_matrix = raster_to_matrix(cropped_data)
+
+#Remove negative elevation data
+dc_elevation_matrix[dc_elevation_matrix < 0] = 0
+
+#Plot a 3D map of the national mall
+dc_elevation_matrix |>
+ height_shade() |>
+ add_shadow(lamb_shade(dc_elevation_matrix), 0) |>
+ plot_3d(dc_elevation_matrix, zscale=3.7, water = TRUE, waterdepth = 1,
+         soliddepth=-50, windowsize = 800)
+#Zoom in on the monument
+render_camera(theta=150,  phi=35, zoom= 0.55, fov=70)
+#Render the national monument at solar noon on the solstice
+rgl::par3d(ignoreExtent = TRUE)
+render_multipolygonz(washington_monument_multipolygonz,
+                    extent = raster::extent(cropped_data),
+                    zscale = 4, color = "grey80",
+                    heightmap = dc_elevation_matrix)
+#Render the (short) shadow the summer solstice
+render_highquality(min_variance = 0, samples = 16,
+                  long = -77.035249, lat = 38.889462,
+                  datetime = as.POSIXct("2025-06-21 12:00:00",tz="EST"))
+#Render the shadow the winter solstice (using the higher quality prague model)
+render_highquality(min_variance = 0, samples = 16,
+                  long = -77.035249, lat = 38.889462,
+                  sky_args = list(hosek = FALSE),
+                  datetime = as.POSIXct("2025-12-21 12:00:00",tz="EST"))
 }
 }

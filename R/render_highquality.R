@@ -18,6 +18,15 @@
 #'Smaller numbers give higher quality images, at the expense of longer rendering times.
 #'If this is set to zero, the adaptive sampler will be turned off and the renderer will use the maximum number of samples everywhere.
 #'@param light Default `TRUE`. Whether there should be a light in the scene. If not, the scene will be lit with a bluish sky.
+#'@param lat Default `NA`. Latitude (degrees) for automatic sky generation.
+#'When `lat`, `long`, `datetime`, or `sky_args` are supplied, `render_highquality()` uses
+#'`skymodelr::generate_sky_latlong()` to create an EXR environment map, disables the default light,
+#'and sets `environment_light` for the render.
+#'@param long Default `NA`. Longitude (degrees; west < 0) for automatic sky generation.
+#'@param datetime Default `NA`. POSIXct or character date-time used to position the sun.
+#'@param sky_args Default empty `list()`. Additional arguments passed to
+#'`skymodelr::generate_sky_latlong()` (except `filename`, which is managed internally).
+#'The EXR is cached in `tempdir()` using a filename derived from these inputs.
 #'@param lightdirection Default `315`. Position of the light angle around the scene.
 #'If this is a vector longer than one, multiple lights will be generated (using values from
 #'`lightaltitude`, `lightintensity`, and `lightcolor`)
@@ -75,7 +84,8 @@
 #'@param scene_elements Default `NULL`. Extra scene elements to add to the scene, created with rayrender.
 #'@param clear Default `FALSE`. If `TRUE`, the current `rgl` device will be cleared.
 #'@param print_scene_info Default `FALSE`. If `TRUE`, it will print the position and lookat point of the camera.
-#'@param clamp_value Default `10`. See documentation for `rayrender::render_scene()`.
+#'@param clamp_value Default `NA`. If `NA`, uses `100` when the OIDN denoiser is unavailable
+#'and `10000` when it is available (via `rayrender::has_denoiser()`).
 #'@param return_scene Default `FALSE`. If `TRUE`, this will return the rayrender scene (instead of rendering the image).
 #'@param load_normals Default `TRUE`. Whether to load the vertex normals if they exist in the OBJ file.
 #'@param calculate_consistent_normals Default `FALSE`. Whether to calculate consistent vertex normals to prevent energy
@@ -92,6 +102,7 @@
 #'can be specified here.
 #'@param animation_camera_coords Default `NULL`. Expects camera animation output from either [convert_path_to_animation_coords()]
 #'or `rayrender::generate_camera_motion()` functions.
+#'@param plot Default `is.na(filename)`. Whether to plot the scene, or just return the RGBA array.
 #'@param ... Additional parameters to pass to `rayrender::render_scene`()
 #'
 #'@export
@@ -165,12 +176,65 @@
 #'                                    material=rayrender::light(color="red",intensity=10)),
 #'                   min_variance = 0, samples = 16)
 #'}
+#'# Render the shadow of the Washington Monument with a realistic sky at that datetime
+#'run_examples = length(find.package("sf", quiet = TRUE)) &&
+#'               length(find.package("elevatr", quiet = TRUE)) &&
+#'               length(find.package("raster", quiet = TRUE)) &&
+#'               run_documentation()
+#'if(run_examples) {
+#'library(sf)
+#'#Set location of washington monument
+#'washington_monument_location =  st_point(c(-77.035249, 38.889462))
+#'wm_point = washington_monument_location |>
+#'  st_point() |>
+#'  st_sfc(crs = 4326) |>
+#'  st_transform(st_crs(washington_monument_multipolygonz))
+#'
+#'elevation_data = elevatr::get_elev_raster(locations = wm_point, z = 14)
+#'
+#'scene_bbox = st_bbox(st_buffer(wm_point,300))
+#'cropped_data = raster::crop(elevation_data, scene_bbox)
+#'
+#'#Use rayshader to convert that raster data to a matrix
+#'dc_elevation_matrix = raster_to_matrix(cropped_data)
+#'
+#'#Remove negative elevation data
+#'dc_elevation_matrix[dc_elevation_matrix < 0] = 0
+#'
+#'#Plot a 3D map of the national mall
+#'dc_elevation_matrix |>
+#'  height_shade() |>
+#'  add_shadow(lamb_shade(dc_elevation_matrix), 0) |>
+#'  plot_3d(dc_elevation_matrix, zscale=3.7, water = TRUE, waterdepth = 1,
+#'          soliddepth=-50, windowsize = 800)
+#'#Zoom in on the monument
+#'render_camera(theta=150,  phi=35, zoom= 0.55, fov=70)
+#'#Render the national monument at solar noon on the solstice
+#'rgl::par3d(ignoreExtent = TRUE)
+#'render_multipolygonz(washington_monument_multipolygonz,
+#'                     extent = raster::extent(cropped_data),
+#'                     zscale = 4, color = "grey80",
+#'                     heightmap = dc_elevation_matrix)
+#' #Render the (short) shadow the summer solstice
+#'render_highquality(min_variance = 0, samples = 16,
+#'                   long = -77.035249, lat = 38.889462,
+#'                   datetime = as.POSIXct("2025-06-21 12:00:00",tz="EST"))
+#' #Render the shadow the winter solstice (using the higher quality prague model)
+#'render_highquality(min_variance = 0, samples = 16,
+#'                   long = -77.035249, lat = 38.889462,
+#'                   sky_args = list(hosek = FALSE),
+#'                   datetime = as.POSIXct("2025-12-21 12:00:00",tz="EST"))
+#'}
 render_highquality = function(
 	filename = NA,
 	samples = 128,
 	sample_method = "sobol_blue",
 	min_variance = 1e-7,
 	light = TRUE,
+	lat = NA,
+	long = NA,
+	datetime = NA,
+	sky_args = list(),
 	lightdirection = 315,
 	lightaltitude = 45,
 	lightsize = NULL,
@@ -212,7 +276,7 @@ render_highquality = function(
 	clear = FALSE,
 	return_scene = FALSE,
 	print_scene_info = FALSE,
-	clamp_value = 10,
+	clamp_value = NA,
 	calculate_consistent_normals = FALSE,
 	load_normals = TRUE,
 	point_material = rayrender::diffuse,
@@ -220,6 +284,7 @@ render_highquality = function(
 	path_material = rayrender::diffuse,
 	path_material_args = list(),
 	animation_camera_coords = NULL,
+	plot = is.na(filename),
 	...
 ) {
 	if (rgl::cur3d() == 0) {
@@ -246,6 +311,207 @@ render_highquality = function(
 	}
 	if (!(length(find.package("rayrender", quiet = TRUE)) > 0)) {
 		stop("`rayrender` package required for render_highquality()")
+	}
+	if (is.na(clamp_value)) {
+		clamp_value = if (rayrender::has_denoiser()) 10000 else 100
+	}
+
+	dot_args = list(...)
+	if (is.null(sky_args)) {
+		sky_args = list()
+	}
+	if (!is.list(sky_args)) {
+		stop("`sky_args` must be a list.")
+	}
+
+	use_sky = FALSE
+	if (!is.null(lat) && !is.na(lat)) {
+		if (length(lat) != 1) {
+			stop("`lat` must be length 1.")
+		}
+		use_sky = TRUE
+	}
+	if (!is.null(long) && !is.na(long)) {
+		if (length(long) != 1) {
+			stop("`long` must be length 1.")
+		}
+		use_sky = TRUE
+	}
+	if (!is.null(datetime) && !is.na(datetime)) {
+		if (length(datetime) != 1) {
+			stop("`datetime` must be length 1.")
+		}
+		use_sky = TRUE
+	}
+	if (length(sky_args) > 0) {
+		use_sky = TRUE
+	}
+
+	sky_file = NULL
+	if (use_sky) {
+		if (!requireNamespace("skymodelr", quietly = TRUE)) {
+			stop(
+				"`skymodelr` package required for automatic sky generation. ",
+				"Install it or provide `environment_light` via `...`."
+			)
+		}
+		if ("environment_light" %in% names(dot_args)) {
+			warning(
+				"`environment_light` supplied in `...` ignored because ",
+				"`lat`, `long`, `datetime`, or `sky_args` are set."
+			)
+			dot_args$environment_light = NULL
+		}
+		if ("filename" %in% names(sky_args)) {
+			warning("`sky_args$filename` ignored: sky EXR is cached in tempdir().")
+			sky_args$filename = NULL
+		}
+
+		format_sky_value = function(value) {
+			if (is.null(value)) {
+				return("null")
+			}
+			if (length(value) == 0) {
+				return("empty")
+			}
+			if (inherits(value, "POSIXt")) {
+				return(format(value, "%Y%m%dT%H%M%S%z"))
+			}
+			if (is.numeric(value)) {
+				return(paste(
+					format(value, digits = 8, scientific = FALSE, trim = TRUE),
+					collapse = "-"
+				))
+			}
+			if (is.logical(value)) {
+				return(paste(ifelse(value, "TRUE", "FALSE"), collapse = "-"))
+			}
+			if (is.character(value)) {
+				return(paste(value, collapse = "-"))
+			}
+			paste(capture.output(dput(value)), collapse = "")
+		}
+
+		sky_arg_names_raw = names(sky_args)
+		lat_value = lat
+		if (
+			!is.null(sky_arg_names_raw) &&
+				(is.null(lat_value) || is.na(lat_value)) &&
+				"lat" %in% sky_arg_names_raw
+		) {
+			lat_value = sky_args$lat
+		}
+		long_value = long
+		if (
+			!is.null(sky_arg_names_raw) &&
+				(is.null(long_value) || is.na(long_value)) &&
+				"lon" %in% sky_arg_names_raw
+		) {
+			long_value = sky_args$lon
+		}
+		if (
+			!is.null(sky_arg_names_raw) &&
+				(is.null(long_value) || is.na(long_value)) &&
+				"long" %in% sky_arg_names_raw
+		) {
+			long_value = sky_args$long
+		}
+		datetime_value = datetime
+		if (
+			!is.null(sky_arg_names_raw) &&
+				(is.null(datetime_value) || is.na(datetime_value)) &&
+				"datetime" %in% sky_arg_names_raw
+		) {
+			datetime_value = sky_args$datetime
+		}
+
+		lat_key = if (!is.null(lat_value) && !is.na(lat_value)) {
+			format_sky_value(lat_value)
+		} else {
+			"default"
+		}
+		long_key = if (!is.null(long_value) && !is.na(long_value)) {
+			format_sky_value(long_value)
+		} else {
+			"default"
+		}
+		datetime_key = if (!is.null(datetime_value) && !is.na(datetime_value)) {
+			format_sky_value(datetime_value)
+		} else {
+			"default"
+		}
+
+		sky_args_for_key = sky_args
+		sky_args_for_key[c("lat", "lon", "long", "datetime")] = NULL
+		if (length(sky_args_for_key) > 0) {
+			sky_arg_names = names(sky_args_for_key)
+			if (is.null(sky_arg_names)) {
+				sky_arg_names = paste0("arg", seq_along(sky_args_for_key))
+			} else if (any(sky_arg_names == "")) {
+				sky_arg_names[sky_arg_names == ""] = paste0(
+					"arg",
+					seq_along(sky_args_for_key)
+				)[sky_arg_names == ""]
+			}
+			sky_args_key = paste(
+				vapply(
+					seq_along(sky_args_for_key),
+					function(i) {
+						paste0(
+							sky_arg_names[i],
+							"=",
+							format_sky_value(sky_args_for_key[[i]])
+						)
+					},
+					""
+				),
+				collapse = "__"
+			)
+		} else {
+			sky_args_key = "default"
+		}
+
+		sky_key = paste(
+			"lat",
+			lat_key,
+			"long",
+			long_key,
+			"datetime",
+			datetime_key,
+			sky_args_key,
+			sep = "__"
+		)
+		sky_key = gsub("[^A-Za-z0-9_-]", "-", sky_key)
+		sky_key = gsub("-+", "-", sky_key)
+		sky_key = substr(sky_key, 1, 160)
+		sky_prefix = paste0("rayshader_sky_", sky_key, "_")
+		existing_files = list.files(
+			tempdir(),
+			pattern = paste0("^", sky_prefix, ".*\\.exr$"),
+			full.names = TRUE
+		)
+		if (length(existing_files) > 0) {
+			sky_file = existing_files[1]
+		} else {
+			sky_file = tempfile(pattern = sky_prefix, fileext = ".exr")
+		}
+
+		if (!file.exists(sky_file)) {
+			sky_call_args = sky_args
+			sky_call_args$filename = sky_file
+			if (!is.null(lat) && !is.na(lat)) {
+				sky_call_args$lat = lat
+			}
+			if (!is.null(long) && !is.na(long)) {
+				sky_call_args$lon = long
+			}
+			if (!is.null(datetime) && !is.na(datetime)) {
+				sky_call_args$datetime = datetime
+			}
+			do.call(skymodelr::generate_sky_latlong, sky_call_args)
+		}
+
+		light = FALSE
 	}
 
 	#Check path/point material arguments
@@ -735,12 +1001,12 @@ render_highquality = function(
 				scene = rayrender::add_object(
 					scene,
 					rayrender::sphere(
-						x = observer_radius *
+						x = -observer_radius *
 							5 *
 							cospi(lightaltitudetemp / 180) *
 							sinpi(lightdirectiontemp / 180),
 						y = observer_radius * 5 * sinpi(lightaltitudetemp / 180),
-						z = -observer_radius *
+						z = observer_radius *
 							5 *
 							cospi(lightaltitudetemp / 180) *
 							cospi(lightdirectiontemp / 180),
@@ -779,8 +1045,8 @@ render_highquality = function(
 
 	if (!is.null(animation_camera_coords)) {
 		stopifnot(ncol(animation_camera_coords) == 14)
-		rayrender::render_animation(
-			scene,
+		animation_args = list(
+			scene = scene,
 			camera_motion = animation_camera_coords,
 			width = width,
 			height = height,
@@ -788,92 +1054,73 @@ render_highquality = function(
 			samples = samples,
 			sample_method = sample_method,
 			filename = filename,
-			clamp_value = clamp_value,
-			...
+			clamp_value = clamp_value
 		)
+		if (!is.null(sky_file)) {
+			animation_args$environment_light = sky_file
+		}
+		do.call(rayrender::render_animation, c(animation_args, dot_args))
 		return()
+	}
+
+	render_scene_args = list(
+		scene = scene,
+		lookfrom = lookfrom,
+		lookat = camera_lookat,
+		fov = fov,
+		min_variance = min_variance,
+		samples = samples,
+		sample_method = sample_method,
+		ortho_dimensions = ortho_dimensions,
+		width = width,
+		height = height,
+		clamp_value = clamp_value,
+		plot_scene = plot
+	)
+	if (!is.null(sky_file)) {
+		render_scene_args$environment_light = sky_file
+	}
+	render_scene_call = function(extra_args = list()) {
+		do.call(rayrender::render_scene, c(render_scene_args, extra_args, dot_args))
 	}
 
 	if (has_title) {
 		temp = tempfile(fileext = ".png")
-		debug_return = rayrender::render_scene(
-			scene,
-			lookfrom = lookfrom,
-			lookat = camera_lookat,
-			fov = fov,
-			filename = temp,
-			min_variance = min_variance,
-			samples = samples,
-			sample_method = sample_method,
-			ortho_dimensions = ortho_dimensions,
-			width = width,
-			height = height, #camera_up = camera_up,
-			clamp_value = clamp_value,
-			...
-		)
-		if (has_title) {
-			if (is.na(filename)) {
-				temp = rayimage::ray_read_image(temp)
-				rayimage::render_title(
-					temp,
-					title_text = title_text,
-					title_color = title_color,
-					title_font = title_font,
-					title_offset = title_offset,
-					title_just = title_just,
-					title_bar_alpha = title_bar_alpha,
-					title_bar_color = title_bar_color,
-					title_size = title_size,
-					preview = TRUE
-				)
-			} else {
-				temp = rayimage::ray_read_image(temp)
-				rayimage::render_title(
-					temp,
-					title_text = title_text,
-					title_color = title_color,
-					title_font = title_font,
-					title_offset = title_offset,
-					title_just = title_just,
-					title_bar_alpha = title_bar_alpha,
-					title_bar_color = title_bar_color,
-					title_size = title_size,
-					filename = filename
-				)
-			}
-		}
-	} else {
-		if (!is.na(filename)) {
-			debug_return = rayrender::render_scene(
-				scene,
-				lookfrom = lookfrom,
-				lookat = camera_lookat,
-				fov = fov,
-				filename = filename,
-				min_variance = min_variance,
-				samples = samples,
-				sample_method = sample_method,
-				ortho_dimensions = ortho_dimensions,
-				width = width,
-				height = height, #camera_up = camera_up,
-				clamp_value = clamp_value,
-				...
+		debug_return = render_scene_call(list(filename = temp))
+		if (plot) {
+			temp = rayimage::ray_read_image(temp)
+			rayimage::render_title(
+				temp,
+				title_text = title_text,
+				title_color = title_color,
+				title_font = title_font,
+				title_offset = title_offset,
+				title_just = title_just,
+				title_bar_alpha = title_bar_alpha,
+				title_bar_color = title_bar_color,
+				title_size = title_size,
+				preview = TRUE
 			)
 		} else {
-			debug_return = rayrender::render_scene(
-				scene,
-				lookfrom = lookfrom,
-				lookat = camera_lookat,
-				fov = fov,
-				min_variance = min_variance,
-				samples = samples,
-				sample_method = sample_method,
-				ortho_dimensions = ortho_dimensions,
-				width = width,
-				height = height, #camera_up = camera_up,
-				clamp_value = clamp_value,
-				...
+			temp = rayimage::ray_read_image(temp)
+			rayimage::render_title(
+				temp,
+				title_text = title_text,
+				title_color = title_color,
+				title_font = title_font,
+				title_offset = title_offset,
+				title_just = title_just,
+				title_bar_alpha = title_bar_alpha,
+				title_bar_color = title_bar_color,
+				title_size = title_size,
+				filename = filename
 			)
+		}
+	} else {
+		if (plot) {
+			debug_return = render_scene_call()
+		} else {
+			debug_return = render_scene_call(list(filename = filename))
 		}
 	}
 	if (clear) {
