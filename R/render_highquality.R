@@ -389,7 +389,7 @@ render_highquality = function(
 			if (is.character(value)) {
 				return(paste(value, collapse = "-"))
 			}
-			paste(capture.output(dput(value)), collapse = "")
+			paste(utils::capture.output(dput(value)), collapse = "")
 		}
 
 		sky_arg_names_raw = names(sky_args)
