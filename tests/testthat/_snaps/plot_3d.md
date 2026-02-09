@@ -600,7 +600,7 @@
                     {
                       "type": "double",
                       "attributes": {},
-                      "value": [0.05]
+                      "value": [3]
                     },
                     {
                       "type": "double",
@@ -773,7 +773,7 @@
                     {
                       "type": "double",
                       "attributes": {},
-                      "value": [0.05]
+                      "value": [3]
                     },
                     {
                       "type": "double",
@@ -946,7 +946,7 @@
                     {
                       "type": "double",
                       "attributes": {},
-                      "value": [0.05]
+                      "value": [3]
                     },
                     {
                       "type": "double",
