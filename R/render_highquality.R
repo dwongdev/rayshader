@@ -363,7 +363,9 @@ render_highquality = function(
 			dot_args$environment_light = NULL
 		}
 		if ("filename" %in% names(sky_args)) {
-			warning("`sky_args$filename` ignored: sky EXR is cached in tempdir().")
+			warning(
+				"`sky_args$filename` ignored: sky EXR is cached in tempdir()."
+			)
 			sky_args$filename = NULL
 		}
 
@@ -843,14 +845,20 @@ render_highquality = function(
 					width = temp_lwd * 2,
 					smooth_normals = TRUE,
 					straight = !smooth_line,
-					material = do.call("path_material", args = path_material_args)
+					material = do.call(
+						"path_material",
+						args = path_material_args
+					)
 				)
 			} else {
 				pathline[[counter]] = rayrender::path(
 					points = temp_verts_single - matrix_center,
 					width = temp_lwd * 2,
 					straight = !smooth_line,
-					material = do.call("path_material", args = path_material_args)
+					material = do.call(
+						"path_material",
+						args = path_material_args
+					)
 				)
 			}
 			counter = counter + 1
@@ -954,6 +962,10 @@ render_highquality = function(
 			pivot_point = c(0, 0, 0)
 		)
 	}
+	lookfrom_rayrender = lookfrom
+	camera_lookat_rayrender = camera_lookat
+	animation_camera_coords_rayrender = animation_camera_coords
+
 	if (light) {
 		if (is.null(lightsize)) {
 			lightsize = observer_radius / 5
@@ -1001,12 +1013,14 @@ render_highquality = function(
 				scene = rayrender::add_object(
 					scene,
 					rayrender::sphere(
-						x = -observer_radius *
+						x = observer_radius *
 							5 *
 							cospi(lightaltitudetemp / 180) *
 							sinpi(lightdirectiontemp / 180),
-						y = observer_radius * 5 * sinpi(lightaltitudetemp / 180),
-						z = observer_radius *
+						y = observer_radius *
+							5 *
+							sinpi(lightaltitudetemp / 180),
+						z = -observer_radius *
 							5 *
 							cospi(lightaltitudetemp / 180) *
 							cospi(lightdirectiontemp / 180),
@@ -1047,7 +1061,7 @@ render_highquality = function(
 		stopifnot(ncol(animation_camera_coords) == 14)
 		animation_args = list(
 			scene = scene,
-			camera_motion = animation_camera_coords,
+			camera_motion = animation_camera_coords_rayrender,
 			width = width,
 			height = height,
 			min_variance = min_variance,
@@ -1065,8 +1079,8 @@ render_highquality = function(
 
 	render_scene_args = list(
 		scene = scene,
-		lookfrom = lookfrom,
-		lookat = camera_lookat,
+		lookfrom = lookfrom_rayrender,
+		lookat = camera_lookat_rayrender,
 		fov = fov,
 		min_variance = min_variance,
 		samples = samples,
@@ -1081,7 +1095,10 @@ render_highquality = function(
 		render_scene_args$environment_light = sky_file
 	}
 	render_scene_call = function(extra_args = list()) {
-		do.call(rayrender::render_scene, c(render_scene_args, extra_args, dot_args))
+		do.call(
+			rayrender::render_scene,
+			c(render_scene_args, extra_args, dot_args)
+		)
 	}
 
 	if (has_title) {
