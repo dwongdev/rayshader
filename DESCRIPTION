@@ -25,9 +25,9 @@ Imports: doParallel,
          utils,
          methods,
          terrainmeshr,
-         rayimage (>= 0.22.3),
+         rayimage (>= 0.24.1),
          rayvertex (>= 0.13.1),
-         rayrender (>= 0.39.2)
+         rayrender (>= 0.40.0)
 Suggests: 
     reshape2,
     viridis,
