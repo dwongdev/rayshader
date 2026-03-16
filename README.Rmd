@@ -301,7 +301,7 @@ You can also render using the built-in pathtracer, powered by [rayrender](https:
 
 ```{r README_three-dhq, fig.width = 10, fig.height = 8}
 
-elmat |>
+elmat |> 
 	sphere_shade(texture = "desert") |>
 	add_water(detect_water(elmat), color = "desert") |>
 	plot_3d(
@@ -311,6 +311,8 @@ elmat |>
 		theta = 72,
 		zoom = 0.68,
 		phi = 40,
+		shadowdepth = -100,
+		soliddepth = -100,
 		windowsize = c(1000, 800)
 	)
 
@@ -324,9 +326,39 @@ render_scalebar(
 
 render_compass(position = "E")
 Sys.sleep(0.2)
-render_highquality(samples = 16, scale_text_size = 24, clear = TRUE)
+render_highquality(samples = 16, scale_text_size = 24) 
 
 ```
+
+You can pass a latitude, longitude, and datetime to render this location with a realistic atmosphere and sun direction at that time and place, using the `skymodelr` package. Here's Hobart, Tasmania in the winter in the southern hemisphere.
+
+```{r skymnodelr, fig.width = 10, fig.height = 8}
+elmat_lat_long = c(-42.745792, 147.171103)
+render_highquality(
+	samples = 16,
+	lat = elmat_lat_long[1],
+	long = elmat_lat_long[2],
+	iso = 5, clamp_value = 1000,
+	datetime = as.POSIXct("2025-06-21 15:00:00", tz = "Australia/Sydney"), 
+	sky_args = list(hosek = FALSE),
+	width=1000, height=800
+) 
+```
+
+Here's the same location at noon. This is the southern hemisphere, so the light is coming from north, as noted by the compass.
+
+```{r skymnodelr2, fig.width = 10, fig.height = 8}
+render_highquality(
+	samples = 16,
+	lat = elmat_lat_long[1],
+	long = elmat_lat_long[2],
+	iso = 5, clamp_value = 1000,
+	datetime = as.POSIXct("2025-06-21 12:00:00", tz = "Australia/Sydney"),
+	sky_args = list(hosek = FALSE),
+	width=1000, height=800 
+)
+```
+
 
 ```{r include = FALSE}
 rgl::close3d()

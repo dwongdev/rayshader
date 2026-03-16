@@ -177,6 +177,7 @@
 #'                   min_variance = 0, samples = 16)
 #'}
 #'# Render the shadow of the Washington Monument with a realistic sky at that datetime
+#'# using the `skymodelr` package.
 #'run_examples = length(find.package("sf", quiet = TRUE)) &&
 #'               length(find.package("elevatr", quiet = TRUE)) &&
 #'               length(find.package("raster", quiet = TRUE)) &&
@@ -187,6 +188,7 @@
 #'washington_monument_location =  st_point(c(-77.035249, 38.889462))
 #'wm_point = washington_monument_location |>
 #'  st_point() |>
+#'  st_buffer(0.01) |>
 #'  st_sfc(crs = 4326) |>
 #'  st_transform(st_crs(washington_monument_multipolygonz))
 #'
@@ -208,22 +210,38 @@
 #'  plot_3d(dc_elevation_matrix, zscale=3.7, water = TRUE, waterdepth = 1,
 #'          soliddepth=-50, windowsize = 800)
 #'#Zoom in on the monument
-#'render_camera(theta=150,  phi=35, zoom= 0.55, fov=70)
+#'render_camera(theta=45,  phi=0, zoom= 0.03, fov=130)
 #'#Render the national monument at solar noon on the solstice
 #'rgl::par3d(ignoreExtent = TRUE)
 #'render_multipolygonz(washington_monument_multipolygonz,
 #'                     extent = raster::extent(cropped_data),
 #'                     zscale = 4, color = "grey80",
 #'                     heightmap = dc_elevation_matrix)
-#' #Render the (short) shadow the summer solstice
-#'render_highquality(min_variance = 0, samples = 16,
-#'                   long = -77.035249, lat = 38.889462,
-#'                   datetime = as.POSIXct("2025-06-21 12:00:00",tz="EST"))
-#' #Render the shadow the winter solstice (using the higher quality prague model)
-#'render_highquality(min_variance = 0, samples = 16,
-#'                   long = -77.035249, lat = 38.889462,
-#'                   sky_args = list(hosek = FALSE),
-#'                   datetime = as.POSIXct("2025-12-21 12:00:00",tz="EST"))
+#' #Render using the built-in (but less accurate) Hosek model.
+#' # Here's it's more yellow than it should be, but it's accurate enough for most renders.
+#'render_highquality(
+#'	min_variance = 0,
+#'	samples = 16,
+#'	long = -77.035249,
+#'	lat = 38.889462,
+#'	iso = 8,
+#'	clamp_value = 10000,
+#'	datetime = as.POSIXct("2025-12-21 16:00:00", tz = "EST")
+#')
+#'
+#'# Render the more-accurate Praguq model (that requires
+#'# supplemental data that will be downloaded on the first call) and
+#'# specify a higher resolution environment map via `sky_args`
+#'render_highquality(
+#'	min_variance = 0,
+#'	samples = 16,
+#'	long = -77.035249,
+#'	lat = 38.889462,
+#'	sky_args = list(hosek = FALSE,resolution=4000),
+#'	iso = 8,
+#'	clamp_value = 10000,
+#'	datetime = as.POSIXct("2025-12-21 16:00:00", tz = "EST")
+#')
 #'}
 render_highquality = function(
 	filename = NA,
@@ -674,6 +692,7 @@ render_highquality = function(
 		mean(lookvals[5:6])
 	) -
 		movevec
+	theta = theta + 180
 	observery = sinpi(phi / 180) * observer_radius
 	observerx = cospi(phi / 180) * sinpi(theta / 180) * observer_radius
 	observerz = cospi(phi / 180) * cospi(theta / 180) * observer_radius
@@ -1053,6 +1072,9 @@ render_highquality = function(
 	if (!is.null(scene_elements)) {
 		scene = rayrender::add_object(scene, scene_elements)
 	}
+
+	scene = rayrender::group_objects(scene, angle = c(0, 180, 0))
+
 	if (return_scene) {
 		return(scene)
 	}
