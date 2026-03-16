@@ -60,4 +60,5 @@ Config/testthat/edition: 3
 Remotes: tylermorganwall/raybevel, 
     tylermorganwall/rayimage, 
     tylermorganwall/rayrender, 
-    dmurdoch/rgl
+    dmurdoch/rgl,
+	tylermorganwall/skymodelr
