@@ -108,63 +108,7 @@
 #'            lat = unlist(circle_coords_lat), long = unlist(circle_coords_long), zscale=50)
 #'render_snapshot()
 #'}
-#'
-#'#We will use the lidR package to generate a DEM and detect the crown tops of trees, and
-#'#then use rayshader to render 3D tree models scaled to those heights on the map.
-#'run_example = length(find.package("lidR", quiet = TRUE)) > 0 &&
-#'              length(find.package("sf", quiet = TRUE)) > 0 &&
-#'              length(find.package("terra", quiet = TRUE)) > 0 &&
-#'              run_documentation()
-#'if (run_example) {
-#'#Load the example data from the lidR package
-#'LASfile = system.file("extdata", "Topography.laz", package="lidR")
-#'las = lidR::readLAS(LASfile, filter = "-inside 273450 5274350 273550 5274450")
-#'
-#'#Convert the lidar point data to a DEM and detect the location of trees from the same data
-#'dem = lidR::rasterize_terrain(las, algorithm = lidR::tin())
-#'tree_top_data = lidR::locate_trees(las, lidR::lmf(ws = 5))
-#'tree_locations = sf::st_coordinates(tree_top_data)
-#'
-#'#Convert DEM to a matrix and extract the extent of the scene
-#'dem_matrix = raster_to_matrix(dem)
-#'dem_extent = terra::ext(dem)
-#'extent_values = dem_extent@pntr$vector
-#'
-#'#Plot the ground
-#'dem_matrix |>
-#'  height_shade() |>
-#'  add_shadow(texture_shade(dem_matrix),0.2) |>
-#'  add_shadow(lamb_shade(dem_matrix),0) |>
-#'  plot_3d(dem_matrix, windowsize = 800)
-#'render_snapshot()
-#'}
-#'if (run_example) {
-#'#The tree locations are given as an absolute height (as opposed to relative to the surface)
-#'#so we set `absolute_height = TRUE`.
-#'render_tree(lat = tree_locations[,2],
-#'            long = tree_locations[,1],
-#'            crown_width_ratio = 0.5,
-#'            absolute_height = TRUE,
-#'            tree_height = tree_locations[,3],
-#'            trunk_height_ratio = 0.2 + 0.1*runif(nrow(tree_locations)),
-#'            crown_color = "#00aa00",
-#'            extent = raster::extent(extent_values),
-#'            heightmap = dem_matrix,
-#'            clear_previous = TRUE)
-#'
-#'#Remove existing lights and add our own with rgl
-#'rgl::pop3d("lights")
-#'rgl::light3d(phi=35,theta=90, viewpoint.rel=F, diffuse="#ffffff", specular="#000000")
-#'rgl::light3d(phi=-45,theta=-40, viewpoint.rel=F, diffuse="#aaaaaa", specular="#000000")
-#'render_snapshot()
-#'}
-#'if (run_example) {
-#'#Render tree also works with `render_highquality()`
-#'render_highquality(lightdirection=c(90,45),lightaltitude=c(90,45),
-#'                   lightcolor=c("dodgerblue","orange"), samples = 32,
-#'                   min_variance = 0)
-#'}
-render_tree = function(
+render_tree <- function(
 	lat = NULL,
 	long = NULL,
 	extent = NULL,
@@ -199,9 +143,11 @@ render_tree = function(
 		}
 	}
 	# Check if custom tree models exist
-	has_custom_tree = !is.null(custom_obj_tree) && file.exists(custom_obj_tree)
-	has_custom_crown = !is.null(custom_obj_crown) && file.exists(custom_obj_crown)
-	has_custom_trunk = !is.null(custom_obj_trunk) && file.exists(custom_obj_trunk)
+	has_custom_tree <- !is.null(custom_obj_tree) && file.exists(custom_obj_tree)
+	has_custom_crown <- !is.null(custom_obj_crown) &&
+		file.exists(custom_obj_crown)
+	has_custom_trunk <- !is.null(custom_obj_trunk) &&
+		file.exists(custom_obj_trunk)
 
 	if (
 		(has_custom_trunk && !has_custom_crown) ||
@@ -213,8 +159,8 @@ render_tree = function(
 	}
 
 	# Check if the tree is fully custom or partially custom
-	fully_custom_tree = has_custom_trunk && has_custom_crown
-	custom_tree = any(c(has_custom_tree, has_custom_crown, has_custom_trunk))
+	fully_custom_tree <- has_custom_trunk && has_custom_crown
+	custom_tree <- any(c(has_custom_tree, has_custom_crown, has_custom_trunk))
 
 	# Handling case where both full tree and parts are specified
 	if (
@@ -223,57 +169,57 @@ render_tree = function(
 		warning(
 			"Using `custom_obj_tree` over models specied in `custom_obj_crown` and `custom_obj_trunk`"
 		)
-		has_custom_crown = FALSE
-		has_custom_trunk = FALSE
+		has_custom_crown <- FALSE
+		has_custom_trunk <- FALSE
 	}
 
-	use_default_crown_height = FALSE
-	use_default_trunk_height = FALSE
-	use_default_trunk_radius = FALSE
-	use_absolute_widths = FALSE
+	use_default_crown_height <- FALSE
+	use_default_trunk_height <- FALSE
+	use_default_trunk_radius <- FALSE
+	use_absolute_widths <- FALSE
 
 	if (is.null(tree_height)) {
-		tree_height = 10
+		tree_height <- 10
 	}
 	if (is.null(trunk_height_ratio)) {
-		use_default_crown_height = TRUE
-		use_default_trunk_height = TRUE
+		use_default_crown_height <- TRUE
+		use_default_trunk_height <- TRUE
 		if (!custom_tree) {
 			if (type == "cone") {
-				trunk_height_ratio = 1 / 6
+				trunk_height_ratio <- 1 / 6
 			}
 			if (type == "basic") {
-				trunk_height_ratio = 1 / 3
+				trunk_height_ratio <- 1 / 3
 			}
 		} else {
-			trunk_height_ratio = 1 / 3
+			trunk_height_ratio <- 1 / 3
 		}
 	} else {
 		stopifnot(all(trunk_height_ratio < 1 & trunk_height_ratio >= 0))
 	}
 	if (!absolute_height) {
-		crown_height = (1 - trunk_height_ratio) * tree_height
-		trunk_height = (trunk_height_ratio) * tree_height
+		crown_height <- (1 - trunk_height_ratio) * tree_height
+		trunk_height <- (trunk_height_ratio) * tree_height
 	}
 	if (is.null(crown_width_ratio)) {
 		if (type == "cone") {
-			crown_width_ratio = 1 / 2
+			crown_width_ratio <- 1 / 2
 		}
 		if (type == "basic") {
-			crown_width_ratio = 1
+			crown_width_ratio <- 1
 		}
 	}
 
 	if (is.null(trunk_radius)) {
-		use_default_trunk_radius = TRUE
+		use_default_trunk_radius <- TRUE
 	}
 	if (!is.null(crown_width)) {
-		use_absolute_widths = TRUE
+		use_absolute_widths <- TRUE
 	}
 
 	# If absolute height is specified, calculate offset in heightmap coordinates
 	if (absolute_height && length(tree_height) == length(lat)) {
-		xyz_tree = transform_into_heightmap_coords(
+		xyz_tree <- transform_into_heightmap_coords(
 			extent = extent,
 			heightmap = heightmap,
 			lat = lat,
@@ -282,72 +228,72 @@ render_tree = function(
 			offset = 0,
 			zscale = 1
 		)
-		z_tree = xyz_tree[, 2]
-		filter_nan = is.na(z_tree)
+		z_tree <- xyz_tree[, 2]
+		filter_nan <- is.na(z_tree)
 		if (all(filter_nan)) {
 			return(invisible())
 		}
-		z_tree = z_tree[!filter_nan]
-		lat = lat[!filter_nan]
-		long = long[!filter_nan]
+		z_tree <- z_tree[!filter_nan]
+		lat <- lat[!filter_nan]
+		long <- long[!filter_nan]
 		if (length(tree_height) == nrow(xyz_tree)) {
-			tree_height = tree_height[!filter_nan]
+			tree_height <- tree_height[!filter_nan]
 		}
 		if (length(trunk_height_ratio) == nrow(xyz_tree)) {
-			trunk_height_ratio = trunk_height_ratio[!filter_nan]
+			trunk_height_ratio <- trunk_height_ratio[!filter_nan]
 		}
 		if (length(trunk_color) == nrow(xyz_tree)) {
-			trunk_color = trunk_color[!filter_nan]
+			trunk_color <- trunk_color[!filter_nan]
 		}
 		if (length(trunk_radius) == nrow(xyz_tree)) {
-			trunk_radius = trunk_radius[!filter_nan]
+			trunk_radius <- trunk_radius[!filter_nan]
 		}
 		if (length(crown_width_ratio) == nrow(xyz_tree)) {
-			crown_width_ratio = crown_width_ratio[!filter_nan]
+			crown_width_ratio <- crown_width_ratio[!filter_nan]
 		}
 		if (use_absolute_widths && length(crown_width) == nrow(xyz_tree)) {
-			crown_width = crown_width[!filter_nan]
+			crown_width <- crown_width[!filter_nan]
 		}
-		tree_height = tree_height - z_tree
+		tree_height <- tree_height - z_tree
 		if (!is.infinite(max_height) || min_height > 0) {
-			filter_height = tree_height >= max_height | tree_height <= min_height
+			filter_height <- tree_height >= max_height | tree_height <= min_height
 
 			if (length(long) > 1) {
-				long = long[!filter_height]
+				long <- long[!filter_height]
 			}
 
 			if (length(lat) > 1) {
-				lat = lat[!filter_height]
+				lat <- lat[!filter_height]
 			}
 
 			if (length(trunk_color) > 1) {
-				trunk_color = trunk_color[!filter_height]
+				trunk_color <- trunk_color[!filter_height]
 			}
 
 			if (length(trunk_height_ratio) > 1) {
-				trunk_height_ratio = trunk_height_ratio[!filter_height]
+				trunk_height_ratio <- trunk_height_ratio[!filter_height]
 			}
 
 			if (length(trunk_radius) > 1) {
-				trunk_radius = trunk_radius[!filter_height]
+				trunk_radius <- trunk_radius[!filter_height]
 			}
 
 			if (length(crown_width_ratio) > 1) {
-				crown_width_ratio = crown_width_ratio[!filter_height]
+				crown_width_ratio <- crown_width_ratio[!filter_height]
 			}
 
 			if (use_absolute_widths) {
 				if (length(crown_width) > 1) {
-					crown_width = crown_width[!filter_height]
+					crown_width <- crown_width[!filter_height]
 				}
 			}
 
 			if (length(tree_height) > 1) {
-				tree_height = tree_height[!filter_height]
+				tree_height <- tree_height[!filter_height]
 			}
 		}
-		crown_height = (1 - trunk_height_ratio) * tree_height
-		trunk_height = trunk_height_ratio * tree_height
+		crown_height <- (1 - trunk_height_ratio) * tree_height
+		trunk_height <- trunk_height_ratio * tree_height
 		if (length(long) == 0) {
 			return(invisible())
 		}
@@ -359,24 +305,24 @@ render_tree = function(
 	# The basic conical crown has a radius of 5.0 units and a height of 10 units, with the base at 0.0
 	if (!custom_tree) {
 		# Calculate crown radius
-		crown_radius = crown_height * crown_width_ratio / 2
+		crown_radius <- crown_height * crown_width_ratio / 2
 		if (is.null(crown_radius)) {
-			crown_radius = crown_height / 4
+			crown_radius <- crown_height / 4
 		}
 		# Scaling tree dimensions if tree_zscale is TRUE
 		if (tree_zscale) {
-			crown_radius = crown_radius / zscale
-			trunk_radius = trunk_radius / zscale
+			crown_radius <- crown_radius / zscale
+			trunk_radius <- trunk_radius / zscale
 		}
 		#This just ensures the aspect ratio is correct
 		if (type == "cone") {
-			crown_radius = crown_radius * 2
+			crown_radius <- crown_radius * 2
 		}
-		crown_width = crown_radius
+		crown_width <- crown_radius
 	} else {
 		if (!fully_custom_tree) {
 			if (is.null(crown_height)) {
-				crown_height = 1
+				crown_height <- 1
 			}
 			if (!is.null(trunk_height) || !is.null(trunk_radius)) {
 				warning(
@@ -384,62 +330,62 @@ render_tree = function(
 					"crown and trunk OBJs), `crown_height` controls the overall scale of ",
 					"the tree and trunk settings cannot be changed."
 				)
-				trunk_height = 1
-				trunk_radius = 1
+				trunk_height <- 1
+				trunk_radius <- 1
 			}
 			if (!is.null(crown_width_ratio)) {
-				crown_radius = crown_height * crown_width_ratio / 2
+				crown_radius <- crown_height * crown_width_ratio / 2
 			} else {
-				crown_radius = 1
+				crown_radius <- 1
 			}
 		} else {
 			if (is.null(trunk_height)) {
-				trunk_height = 1
+				trunk_height <- 1
 			}
 			if (!use_absolute_widths) {
 				if (!is.null(crown_width_ratio)) {
-					crown_width = crown_height * crown_width_ratio
+					crown_width <- crown_height * crown_width_ratio
 				} else {
-					crown_width = crown_height
+					crown_width <- crown_height
 				}
 			}
 			# Scaling tree dimensions if tree_zscale is TRUE
 			if (tree_zscale) {
-				crown_width = crown_width / zscale
-				trunk_radius = trunk_radius / zscale
+				crown_width <- crown_width / zscale
+				trunk_radius <- trunk_radius / zscale
 			}
 		}
 	}
 	if (use_default_trunk_radius) {
-		trunk_radius = crown_width / 6
+		trunk_radius <- crown_width / 6
 		if (type == "cone") {
-			trunk_radius = trunk_radius / 2
+			trunk_radius <- trunk_radius / 2
 		}
 	}
 	stopifnot(length(lat) == length(long))
-	height_zscale = 1
+	height_zscale <- 1
 
 	# Expand scalar dimensions to vectors if needed
 	if (length(crown_height) == 1) {
-		crown_height = rep(crown_height, length(lat))
+		crown_height <- rep(crown_height, length(lat))
 	}
 	if (length(crown_width) == 1) {
-		crown_width = rep(crown_width, length(lat))
+		crown_width <- rep(crown_width, length(lat))
 	}
 	if (length(trunk_radius) == 1) {
-		trunk_radius = rep(trunk_radius, length(lat))
+		trunk_radius <- rep(trunk_radius, length(lat))
 	}
 	if (length(trunk_height) == 1) {
-		trunk_height = rep(trunk_height, length(lat))
+		trunk_height <- rep(trunk_height, length(lat))
 	}
 	if (!custom_tree) {
 		if (tree_zscale) {
-			tree_scale = matrix(
+			tree_scale <- matrix(
 				c(crown_width / 5, crown_height / 10 / zscale, crown_width / 5),
 				ncol = 3,
 				nrow = length(lat)
 			)
-			trunk_scale = matrix(
+			trunk_scale <- matrix(
 				c(
 					trunk_radius / 0.3,
 					(trunk_height + crown_height / 3) / zscale,
@@ -449,12 +395,12 @@ render_tree = function(
 				nrow = length(lat)
 			)
 		} else {
-			tree_scale = matrix(
+			tree_scale <- matrix(
 				c(crown_width / 5, crown_height / 10, crown_width / 5),
 				ncol = 3,
 				nrow = length(lat)
 			)
-			trunk_scale = matrix(
+			trunk_scale <- matrix(
 				c(
 					trunk_radius / 0.3,
 					(trunk_height + crown_height / 3),
@@ -463,7 +409,7 @@ render_tree = function(
 				ncol = 3,
 				nrow = length(lat)
 			)
-			height_zscale = zscale
+			height_zscale <- zscale
 		}
 	} else {
 		#Scale the custom trees
@@ -471,48 +417,48 @@ render_tree = function(
 			# For this version, we can control all proportions.
 			# This assumes the tree trunk/crown has a radius of 1 and a height of 1.
 			if (tree_zscale) {
-				tree_scale = matrix(
+				tree_scale <- matrix(
 					c(crown_width, crown_height / zscale, crown_width),
 					ncol = 3,
 					nrow = length(lat)
 				)
-				trunk_scale = matrix(
+				trunk_scale <- matrix(
 					c(trunk_radius, trunk_height / zscale, trunk_radius),
 					ncol = 3,
 					nrow = length(lat)
 				)
 			} else {
-				tree_scale = matrix(
+				tree_scale <- matrix(
 					c(crown_width, crown_height, crown_width),
 					ncol = 3,
 					nrow = length(lat)
 				)
-				trunk_scale = matrix(
+				trunk_scale <- matrix(
 					c(trunk_radius, trunk_height, trunk_radius),
 					ncol = 3,
 					nrow = length(lat)
 				)
-				height_zscale = zscale
+				height_zscale <- zscale
 			}
 		} else {
 			if (tree_zscale) {
-				tree_scale = matrix(
+				tree_scale <- matrix(
 					c(crown_width, crown_height / zscale, crown_width),
 					ncol = 3,
 					nrow = length(lat)
 				)
-				trunk_scale = matrix(
+				trunk_scale <- matrix(
 					c(trunk_radius, trunk_height / zscale, trunk_radius),
 					ncol = 3,
 					nrow = length(lat)
 				)
 			} else {
-				tree_scale = matrix(
+				tree_scale <- matrix(
 					c(crown_width, crown_height, crown_width),
 					ncol = 3,
 					nrow = length(lat)
 				)
-				height_zscale = zscale
+				height_zscale <- zscale
 			}
 		}
 	}

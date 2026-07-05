@@ -2,7 +2,7 @@ Package: rayshader
 Type: Package
 Title: Create Maps and Visualize Data in 2D and 3D
 Version: 0.41.0
-Date: 2026-03-15
+Date: 2026-07-05
 Authors@R: 
     person("Tyler", "Morgan-Wall", email = "tylermw@gmail.com",role = c("aut", "cph", "cre"), 
            comment = c(ORCID = "0000-0002-3131-3814"))
@@ -41,7 +41,6 @@ Suggests:
     gifski,
     ambient,
     terra,
-    lidR,
     elevatr,
     gridExtra,
     testthat (>= 3.0.0),
@@ -51,7 +50,6 @@ Suggests:
 	skymodelr
 LinkingTo: Rcpp, progress, RcppArmadillo
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Encoding: UTF-8
 URL: https://www.rayshader.com,
      https://github.com/tylermorganwall/rayshader
@@ -62,3 +60,4 @@ Remotes: tylermorganwall/raybevel,
     tylermorganwall/rayrender, 
     dmurdoch/rgl,
 	tylermorganwall/skymodelr
+Config/roxygen2/version: 8.0.0
