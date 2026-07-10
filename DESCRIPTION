@@ -1,8 +1,8 @@
 Package: rayshader
 Type: Package
 Title: Create Maps and Visualize Data in 2D and 3D
-Version: 0.41.0
-Date: 2026-07-05
+Version: 0.41.1
+Date: 2026-07-09
 Authors@R: 
     person("Tyler", "Morgan-Wall", email = "tylermw@gmail.com",role = c("aut", "cph", "cre"), 
            comment = c(ORCID = "0000-0002-3131-3814"))
@@ -27,7 +27,8 @@ Imports: doParallel,
          terrainmeshr,
          rayimage (>= 0.24.1),
          rayvertex (>= 0.13.1),
-         rayrender (>= 0.40.0)
+         rayrender (>= 0.40.0),
+		 magrittr
 Suggests: 
     reshape2,
     viridis,
@@ -55,9 +56,4 @@ URL: https://www.rayshader.com,
      https://github.com/tylermorganwall/rayshader
 BugReports: https://github.com/tylermorganwall/rayshader/issues
 Config/testthat/edition: 3
-Remotes: tylermorganwall/raybevel, 
-    tylermorganwall/rayimage, 
-    tylermorganwall/rayrender, 
-    dmurdoch/rgl,
-	tylermorganwall/skymodelr
 Config/roxygen2/version: 8.0.0
